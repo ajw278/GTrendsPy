@@ -17,8 +17,22 @@ INFILE = 'search_terms.dat'
 OUTNAME = 'test'
 
 
+plot_queries = ['Celastrina argiolus', 'Peacock', 'Comma', 'Marbled white butterfly']
+
+tcomp = np.datetime64('2016-01-01')
+
 
 if __name__=='__main__':
+	#Set up google trends object with all the queries you want and the time range, geography etc.
+	trend_obj = gtc.gtrends_dataset(OUTNAME, INFILE, T_RANGE, load=True, force_analysis=False, location='GB')
 
-	trend_obj = gtc.gtrends_dataset(OUTNAME, INFILE, T_RANGE, load=True, force_analysis=True)
+	trend_obj.output2csv()
+
+	trend_obj.plot_tseries(plot_queries)
+
+
+	trend_obj.get_ratio_ba(plot_queries[1], tcomp)
+
+	
+	
 	

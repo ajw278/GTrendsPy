@@ -3,6 +3,11 @@ from __future__ import print_function
 import os
 import saveload as sl
 import numpy as np
+import copy
+import operator
+from collections import OrderedDict
+
+import matplotlib.pyplot as plt
 
 from pytrends.request import TrendReq
 
@@ -178,20 +183,20 @@ def find_lowfactors(global_dict, qlist, thresh=1e-7):
 def sort_queries(queries, factors):
 
 	allfacts = np.array(factors)
-	allquers = np.array(queries, dtype=str)
+	allquers = np.array(queries)
 	
 	qsort = np.argsort(allfacts)
 	allquers = allquers[qsort][::-1]
 	
-	return list(allquers)
+	return allquers
 
 	
 	
 
 
 
-def pairwise_queryset(global_dict, query_set, trange, fname, ptrend=None, loc='GB'):
-	MaxLoop = 50
+def pairwise_queryset(global_dict, query_set, trange, fname, ptrend=None, loc='GB', tol=1e-1):
+	MaxLoop = len(global_dict)
 	ref_fact = 1.0
 	allfacts_pw = np.ones(len(query_set))*ref_fact
 	ipair =0
@@ -206,7 +211,6 @@ def pairwise_queryset(global_dict, query_set, trange, fname, ptrend=None, loc='G
 	print('Query    Factor    Approx?')
 
 	for quer in query_set:
-		print(quer, global_dict[quer]['factor'], global_dict[quer]['f_approx'])
 		allfacts.append(global_dict[quer]['factor'])
 		allquers.append(quer)
 
@@ -220,103 +224,103 @@ def pairwise_queryset(global_dict, query_set, trange, fname, ptrend=None, loc='G
 		global_dict3 = sl.load_obj(fname+cmp2ext)
 
 	
+	
+	allquers_prev = allquers
+	iqueries = np.arange(len(allquers))
+	iqsrt = iqueries
+	iqsrt_prev = iqueries
 
+	tmp_dict = {}
+	for q in allquers:
+		tmp_dict[q] = global_dict[q]['factor']
+
+	srt_pw_dict =  OrderedDict(sorted(tmp_dict.items(), key=operator.itemgetter(1), reverse=True))
+	srt_pw_list = []
+	for key in srt_pw_dict:
+		srt_pw_list.append(key)
+
+	
+	data_warning = {}
 	while notSorted and ipair<MaxLoop:
 
 		print('Pairwise sweep %d/%d'%(ipair+1, MaxLoop))
-		allfacts_pw_prev = allfacts_pw
-		allfacts_pw = np.ones(len(allquers))*ref_fact
+		
+		srt_pw_list_prev = copy.copy(srt_pw_list)
 
-		for iq in range(len(allquers)):
-			if iq<len(allquers)-1:
-				iq1 = iq
-				iq2 = iq+1
-			else:
-				iq1 = iq-1
-				iq2 = iq
+		srt_pw_dict[srt_pw_list[0]] =1.
 
-
-			qstring = str(allquers[iq1])+", "+str(allquers[iq2])
-			qtmp = [allquers[iq1],allquers[iq2]]
-
+		#Loop through query indices, sorted into descending popularity
+		for iiq in range(len(srt_pw_list)-1):
+			
 			if ptrend==None:
 				ptrend = TrendReq(hl='en-UK', tz=0)
 
-			
+			quer = srt_pw_list[iiq]
+			next_quer =  srt_pw_list[iiq+1]
+
+
+			qstring = str(quer)+", "+str(next_quer)
+			qtmp = [quer, next_quer]
+
 			if not qstring in global_dict3:
-				#print('Requesting data for: ', qstring)
+				print('Requesting data for: ', qstring)
 				
 				global_dict3[qstring] = {'data': relative_data(qtmp, ptrend, trange=trange, loc=loc), 'factor':1.0}
 
 				sl.save_obj(global_dict3, fname+cmp2ext)
 
-
-			num = float(max(global_dict3[qstring]['data'][qtmp[1]]))
-			denom = float(max(global_dict3[qstring]['data'][qtmp[0]]))
-
-			if num==0.0:
-				print('Warning: 0 reached for second value in drop factor...')
-				frac_drop = 100.0
-			elif denom==0.0:
-				print('Warning: 0 reached for initial value in drop factor...')
-				frac_drop = 0.01
-			else:
-				frac_drop = num/denom
-				
 			
-			allfacts_pw[iq2] = allfacts_pw[iq1]*frac_drop
-				
-			if frac_drop>100. or frac_drop<0.01:
+			q1sum = float(sum(global_dict3[qstring]['data'][qtmp[0]]))
+			q2sum = float(sum(global_dict3[qstring]['data'][qtmp[1]]))
+
+
+			if q2sum/(q1sum+1e-10)>100. or q2sum/(q1sum+1e-10)<0.01:
 				print('Error: pairwise comparison yielded a drop fraction greater than 100')
 				print('Comparison terms: {0} vs. {1}'.format(qtmp[0], qtmp[1]))
 				print('\n**********\nData 1:', global_dict3[qstring]['data'][qtmp[0]])
 				print('\n**********\nData 2:', global_dict3[qstring]['data'][qtmp[1]])
 				exit()
 
+			#If the next query is much more popular than the previous then swap. 
+			if q2sum>1.1*q1sum:
+				print('Swapping: %s with %s (ratio: %.2lf)'%(quer, next_quer, q2sum/q1sum))
+				srt_pw_list[iiq], srt_pw_list[iiq+1] = srt_pw_list[iiq+1], srt_pw_list[iiq]
+				q1sum, q2sum = q2sum, q1sum
+				srt_pw_dict[srt_pw_list[iiq]] = 1.
+
+				if ipair>120:
+					plt.plot(global_dict3[qstring]['data']['Date'], global_dict3[qstring]['data'][quer])
+					plt.plot(global_dict3[qstring]['data']['Date'], global_dict3[qstring]['data'][next_quer])
+					plt.show()
+			
+			srt_pw_dict[srt_pw_list[iiq+1]] = q2sum/q1sum
+
+			
+			
 			qtmp = []
+	
 
-		allquers_srt = sort_queries(allquers, allfacts_pw)
+		notSorted=False
+		if srt_pw_list_prev!=srt_pw_list:
+			notSorted=True
 		
-		dfact = (allfacts_pw[1:]-allfacts_pw[:-1])/allfacts[1:]
-		nrev = len(np.where(dfact<=-5e-2)[0])
-
-		if nrev==0:
-			notSorted=False
-
-		
-		print('\n***************')
-		print('Query   -   Factor')
-		for iq in range(len(allquers_srt)):
-			print(allquers_srt[iq], allfacts_pw[iq])
-		
-		print('Number of pairs not in order:', nrev)
-
-		allquers = allquers_srt
-
-
 		ipair+=1
 
 		if ipair >= MaxLoop:
-			print('Error: reached maximum number of sweeps for pairwise comparison without success')
-			exit()
+			print('Warning: reached maximum number of sweeps for pairwise comparison without success')
+			print('Using current data, but discrepancies between comparisons exist.')
 			
 
-	#global_dict[qtmp[1]]['factor'] = global_dict[qtmp[0]]['factor']*float(max(global_dict3[qstring]['data'][qtmp[1]]))/float(max(global_dict3[qstring]['data'][qtmp[0]]))
+	print('Pairwise sweep complete..')
+
+	factor=1.0
 	
-	
-	for iq in range(len(allquers)):
-		global_dict[allquers[iq]]['factor'] = allfacts_pw[iq]
-		global_dict[allquers[iq]]['f_approx'] = False
+	for item in srt_pw_list:
+		factor*= srt_pw_dict[item]
+		global_dict[item]['factor'] = factor
+		global_dict[item]['f_approx'] = False
+		print(item, global_dict[item]['factor'] )
 
-
-
-	print('Data comparison after pairwise sweep:')
-	print('Query    Factor    Approx?')
-
-	for quer in query_set:
-		print(quer, global_dict[quer]['factor'], global_dict[quer]['f_approx'])
-		allfacts.append(global_dict[quer]['factor'])
-		allquers.append(quer)
 
 
 	sl.save_obj(global_dict, fname)
@@ -369,7 +373,7 @@ def relative_queryset(all_queries, fname, trange, qassoc=None, loc='GB', verbose
 			if PYTREND==None:
 				PYTREND = TrendReq(hl='en-UK', tz=0)
 			print('Requesting data for: ', query)
-			global_dict[query] = {'data':relative_data([query], PYTREND, trange=trange, loc=loc), 'factor':1.0}
+			global_dict[query] = {'data':relative_data([query], PYTREND, trange=trange, loc=loc), 'factor':.0}
 			sl.save_obj(global_dict, fname)
 			#print('Data for %s saved successfully.' %query)
 			#Need to wait so as not to exceed google's rate limit
@@ -460,8 +464,6 @@ def relative_queryset(all_queries, fname, trange, qassoc=None, loc='GB', verbose
 				if not qstring in global_dict2:
 					print('Requesting data for: ', qstring)
 					global_dict2[qstring] = {'data': relative_data(query_temp, PYTREND, trange=trange, loc=loc), 'factor':1.0}
-				else:
-					print('"{0}" already in dictionary'.format(qstring))
 					
 				if ref_query == '':
 					ref_query = get_reference(global_dict2[qstring]['data'])

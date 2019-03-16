@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 def pie_chart(names, vals):
 	sizes = 100.*vals/(np.sum(vals))
@@ -33,4 +33,27 @@ def cumdist(list_cums, lab_list, label=None):
 
 	plt.savefig('cumdist_6mo_bf.pdf', bbox_inches='tight', format='pdf')
 
+	plt.show()
+
+
+def tseries(dates, data_list, factors, quer_list=None, outname='tseries_plot', log=True):
+	
+
+	#plt.rc('text', usetex=True)
+	plt.rc('font', family='serif')
+	
+	for idat in range(len(data_list)):
+		if quer_list!=None:
+			LABEL = quer_list[idat]
+		plt.plot(dates[idat], np.array(data_list[idat])*factors[idat]/np.sum(data_list[idat]), label=LABEL)
+
+	plt.xlabel('Date')
+	plt.ylabel('Relative search volume')
+	if log:
+		plt.yscale('log')
+
+	if quer_list!=None:
+		plt.legend(loc='best')
+
+	plt.savefig(outname+'.pdf', bbox_inches='tight', format='pdf')
 	plt.show()
