@@ -27,7 +27,7 @@ def relative_searches_csv(global_dict, qassoc, outname):
 	
 	stot_all = np.array(stot_all)
 
-	with open(outname+'.csv', 'wb') as csvfile:
+	with open(outname+'.csv', 'w') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
 		writer.writerow(['Term 1'] +['Searches']+ ['Term 2'] + ['Searches']+  ['Term 3'] + ['Searches']+  ['Term 4'] + ['Searches']+['Total'])
 		
@@ -70,7 +70,7 @@ def individual_searches_csv(global_dict, qassoc, outname):
 	
 	
 
-	with open(outname+'.csv', 'wb') as csvfile:
+	with open(outname+'.csv', 'w') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
 		COLS = ['Search term'] +['Association'] + ['Factor']
 		for date in Dates:
